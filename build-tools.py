@@ -191,7 +191,7 @@ def command_import_certificate(options):
         if options.password:
             parameters.extend(["-P", password])
 
-        subprocess.check_call()
+        subprocess.check_call(parameters)
 
 
 @command("install-provisioining-profile", help="install provisioining profile for the current user", arguments=[
