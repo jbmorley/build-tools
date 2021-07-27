@@ -22,6 +22,7 @@
 
 import argparse
 import base64
+import datetime
 import functools
 import glob
 import json
@@ -137,6 +138,15 @@ def command_verify_notarized_zip(options):
         except subprocess.CalledProcessError as e:
             logging.error(e.stderr.decode("utf-8").strip())
             exit("Failed to verify bundle.")
+
+
+@command("synthesize-build-number", help="synthesize a build number (YYmmddHHMM + 8 digit integer representation of a 6 digit Git SHA")
+def command_synthesize_build_number(options):
+    utc_time = datetime.datetime.utcnow()
+    git_sha = subprocess.check_output(["git", "rev-parse", "--short=6", "HEAD"]).decode("utf-8").strip()
+    git_sha_int = int(git_sha, 16)
+    build_number = f"{utc_time.strftime('%y%m%d%H%M')}{git_sha_int:08}"
+    print(build_number)
 
 
 # TODO: Document the password from stdin?
