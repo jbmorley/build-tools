@@ -154,13 +154,24 @@ def command_verify_notarized_zip(options):
             exit("Failed to verify bundle.")
 
 
-@command("synthesize-build-number", help="synthesize a build number (YYmmddHHMM + 8 digit integer representation of a 6 digit Git SHA")
-def command_synthesize_build_number(options):
+@command("generate-build-number", help="synthesize a build number (YYmmddHHMM + 8 digit integer representation of a 6 digit Git SHA")
+def command_generate_build_number(options):
     utc_time = datetime.datetime.utcnow()
     git_sha = subprocess.check_output(["git", "rev-parse", "--short=6", "HEAD"]).decode("utf-8").strip()
     git_sha_int = int(git_sha, 16)
     build_number = f"{utc_time.strftime('%y%m%d%H%M')}{git_sha_int:08}"
     print(build_number)
+
+
+@command("parse-build-number", help="parse a build nunmber to retrieve the date and Git SHA", arguments=[
+    Argument("build", help="build number to parse")
+])
+def command_synthesize_build_number(options):
+    date_string, sha_string = options.build[:10], options.build[10:]
+    date = datetime.datetime.strptime(date_string, "%y%m%d%H%M")
+    sha = "%06x" % int(sha_string)
+    print("%s (UTC)" % date)
+    print(sha)
 
 
 @command("import-base64-certificate", help="import base64 encoded certificate to a specific keychain", arguments=[
