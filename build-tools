@@ -21,6 +21,7 @@
 # SOFTWARE.
 
 import argparse
+import base64
 import functools
 import glob
 import json
@@ -98,7 +99,7 @@ def add_keychain(path):
     subprocess.check_call(["security", "list-keychains", "-d", "user", "-s"] + list_keychains() + [path])
 
 
-@command("create-keychain", help="Safely create a temporary keychain", arguments=[
+@command("create-keychain", help="safely create a temporary keychain", arguments=[
     Argument("path", help="path at which to create the keychain"),
     Argument("--password", "-p", action="store_true", default=False, help="read password from stdin")
 ])
@@ -113,7 +114,7 @@ def command_create_keychain(options):
     unlock_keychain(path, password)
 
 
-@command("delete-keychain", help="Safely delete a temporary keychain removing it from the active set", arguments=[
+@command("delete-keychain", help="safely delete a temporary keychain removing it from the active set", arguments=[
     Argument("path", help="path of the keychain to delete")
 ])
 def command_delete_keychain(options):
@@ -136,6 +137,30 @@ def command_verify_notarized_zip(options):
         except subprocess.CalledProcessError as e:
             logging.error(e.stderr.decode("utf-8").strip())
             exit("Failed to verify bundle.")
+
+
+# TODO: Document the password from stdin?
+@command("import-certificate", help="import base64 encoded certificate to a specific keychain", arguments=[
+    Argument("path", help="path of the keychain to update"),
+    Argument("certificate", help="base64 encoded *.p12 certificate")
+])
+def command_import_certificate(options):
+    path = os.path.abspath(options.path)
+    password = sys.stdin.read().strip()
+    certificate = base64.b64decode(options.certificate)
+
+    with tempfile.TemporaryDirectory() as directory:
+        certificate_path = os.path.join(directory, "certificate.p12")
+        with open(certificate_path, "wb") as fh:
+            fh.write(certificate)
+        subprocess.check_call([
+            "security", "import",
+            certificate_path,
+            "-P", password,
+            "-A",
+            "-t", "cert",
+            "-f", "pkcs12",
+            "-k", path])
 
 
 def main():
