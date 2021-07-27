@@ -149,28 +149,35 @@ def command_synthesize_build_number(options):
     print(build_number)
 
 
-# TODO: Document the password from stdin?
-@command("import-certificate", help="import base64 encoded certificate to a specific keychain", arguments=[
+@command("import-base64-certificate", help="import base64 encoded certificate to a specific keychain", arguments=[
     Argument("path", help="path of the keychain to update"),
-    Argument("certificate", help="base64 encoded *.p12 certificate")
+    Argument("certificate", help="base64 encoded PKCS12 (.p12) certificate")
+    Argument("--password", "-p", action="store_true", default=False, help="read password from stdin")
 ])
 def command_import_certificate(options):
+
     path = os.path.abspath(options.path)
-    password = sys.stdin.read().strip()
+    if options.password:
+        password = sys.stdin.read().strip()
     certificate = base64.b64decode(options.certificate)
 
     with tempfile.TemporaryDirectory() as directory:
         certificate_path = os.path.join(directory, "certificate.p12")
         with open(certificate_path, "wb") as fh:
             fh.write(certificate)
-        subprocess.check_call([
+
+        parameters = [
             "security", "import",
             certificate_path,
-            "-P", password,
             "-A",
             "-t", "cert",
             "-f", "pkcs12",
-            "-k", path])
+            "-k", path]
+
+        if options.password:
+            parameters.extend(["-P", password])
+
+        subprocess.check_call()
 
 
 def main():
