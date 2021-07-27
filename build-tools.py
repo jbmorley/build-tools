@@ -194,10 +194,10 @@ def command_import_certificate(options):
         subprocess.check_call(parameters)
 
 
-@command("install-provisioining-profile", help="install provisioining profile for the current user", arguments=[
+@command("install-provisioning-profile", help="install provisioining profile for the current user", arguments=[
     Argument("path", help="path of profile to install"),
 ])
-def command_install_provisioining_profile(options):
+def command_install_provisioning_profile(options):
     path = os.path.abspath(options.path)
     expression = re.compile(r'<plist version="1\.0">(.*)<\/plist>', re.MULTILINE | re.DOTALL)
     with open(path, "rb") as fh:
