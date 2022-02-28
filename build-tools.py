@@ -35,12 +35,7 @@ import shutil
 import sys
 import tempfile
 
-import lxml
-
-from lxml import etree as ET
-
-# import xml.etree.ElementTree as ET
-
+from xml.dom import minidom
 
 verbose = '--verbose' in sys.argv[1:] or '-v' in sys.argv[1:]
 logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO, format="[%(levelname)s] %(message)s")
@@ -214,8 +209,19 @@ def command_install_provisioning_profile(options):
     with open(path, "rb") as fh:
         contents = fh.read().decode('utf-8', 'ignore')
         match = expression.search(contents)
-        plist = ET.fromstring(match.group(1))
-        uuid = plist.xpath("key[.='UUID']/following-sibling::string")[0].text
+        dom = minidom.parseString(match.group(1))
+        root = dom.getElementsByTagName("dict")[0]
+        uuid = None
+        found_uuid_key = False
+        for child in root.childNodes:
+            if child.nodeName == "key" and child.childNodes[0].data == "UUID":
+                found_uuid_key = True
+                continue
+            elif child.nodeName == "string" and found_uuid_key:
+                uuid = child.childNodes[0].data
+                break
+        if uuid is None:
+            exit("Unable to determine profile UUID.")
     _, ext = os.path.splitext(path)
     destination_name = f"{uuid}{ext}"
     destination_path = os.path.join(PROFILES_DIRECTORY, destination_name)
