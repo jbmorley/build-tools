@@ -6,8 +6,6 @@ verify_ssl = true
 
 [packages]
 
-lxml = "*"
-
 [requires]
 
 python_version = "3"
