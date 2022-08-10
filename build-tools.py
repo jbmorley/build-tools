@@ -205,7 +205,7 @@ def command_import_certificate(options):
 ])
 def command_install_provisioning_profile(options):
     for path in options.path:
-        path = os.path.abspath(options.path)
+        path = os.path.abspath(path)
         expression = re.compile(r'<plist version="1\.0">(.*)<\/plist>', re.MULTILINE | re.DOTALL)
         with open(path, "rb") as fh:
             contents = fh.read().decode('utf-8', 'ignore')
