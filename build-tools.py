@@ -201,38 +201,39 @@ def command_import_certificate(options):
 
 
 @command("install-provisioning-profile", help="install provisioining profile for the current user", arguments=[
-    Argument("path", help="path of profile to install"),
+    Argument("path", nargs="+", help="path of profile to install"),
 ])
 def command_install_provisioning_profile(options):
-    path = os.path.abspath(options.path)
-    expression = re.compile(r'<plist version="1\.0">(.*)<\/plist>', re.MULTILINE | re.DOTALL)
-    with open(path, "rb") as fh:
-        contents = fh.read().decode('utf-8', 'ignore')
-        match = expression.search(contents)
-        dom = minidom.parseString(match.group(1))
-        root = dom.getElementsByTagName("dict")[0]
-        uuid = None
-        found_uuid_key = False
-        for child in root.childNodes:
-            if child.nodeName == "key" and child.childNodes[0].data == "UUID":
-                found_uuid_key = True
-                continue
-            elif child.nodeName == "string" and found_uuid_key:
-                uuid = child.childNodes[0].data
-                break
-        if uuid is None:
-            exit("Unable to determine profile UUID.")
-    _, ext = os.path.splitext(path)
-    destination_name = f"{uuid}{ext}"
-    destination_path = os.path.join(PROFILES_DIRECTORY, destination_name)
-    if not os.path.exists(PROFILES_DIRECTORY):
-        logging.info("Creating profiles directory...")
-        os.makedirs(PROFILES_DIRECTORY)
-    if os.path.exists(destination_path):
-        logging.info("Provisioning profile '%s' already exists.", destination_name)
-        return
-    logging.info("Installing profile '%s' to '%s'...", os.path.basename(path), destination_path)
-    shutil.copy(path, destination_path)
+    for path in options.path:
+        path = os.path.abspath(path)
+        expression = re.compile(r'<plist version="1\.0">(.*)<\/plist>', re.MULTILINE | re.DOTALL)
+        with open(path, "rb") as fh:
+            contents = fh.read().decode('utf-8', 'ignore')
+            match = expression.search(contents)
+            dom = minidom.parseString(match.group(1))
+            root = dom.getElementsByTagName("dict")[0]
+            uuid = None
+            found_uuid_key = False
+            for child in root.childNodes:
+                if child.nodeName == "key" and child.childNodes[0].data == "UUID":
+                    found_uuid_key = True
+                    continue
+                elif child.nodeName == "string" and found_uuid_key:
+                    uuid = child.childNodes[0].data
+                    break
+            if uuid is None:
+                exit("Unable to determine profile UUID.")
+        _, ext = os.path.splitext(path)
+        destination_name = f"{uuid}{ext}"
+        destination_path = os.path.join(PROFILES_DIRECTORY, destination_name)
+        if not os.path.exists(PROFILES_DIRECTORY):
+            logging.info("Creating profiles directory...")
+            os.makedirs(PROFILES_DIRECTORY)
+        if os.path.exists(destination_path):
+            logging.info("Provisioning profile '%s' already exists.", destination_name)
+            return
+        logging.info("Installing profile '%s' to '%s'...", os.path.basename(path), destination_path)
+        shutil.copy(path, destination_path)
 
 
 def main():
