@@ -23,6 +23,7 @@
 import argparse
 import base64
 import datetime
+import fnmatch
 import functools
 import glob
 import json
@@ -34,6 +35,8 @@ import subprocess
 import shutil
 import sys
 import tempfile
+
+import requests
 
 from xml.dom import minidom
 
@@ -158,6 +161,25 @@ def command_generate_build_number(options):
     git_sha_int = int(git_sha, 16)
     build_number = f"{utc_time.strftime('%y%m%d%H%M')}{git_sha_int:08}"
     print(build_number)
+
+
+@command("latest-github-release", help="get the URL for an asset from the latest GitHub release matching a pattern", arguments=[
+    Argument("owner"),
+    Argument("repository"),
+    Argument("pattern"),
+])
+def command_latest_github_release(options):
+    response = requests.get(f"https://api.github.com/repos/{options.owner}/{options.repository}/releases/latest", headers={
+        'Accept': 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+    })
+    regex = re.compile(fnmatch.translate(options.pattern))
+    for asset in response.json()["assets"]:
+        if not regex.match(asset["name"]):
+            continue
+        print(asset["browser_download_url"])
+        return
+    exit(f"Failed to find asset with pattern '{options.pattern}'.")
 
 
 @command("parse-build-number", help="parse a build nunmber to retrieve the date and Git SHA", arguments=[
