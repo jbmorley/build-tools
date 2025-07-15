@@ -35,6 +35,7 @@ import subprocess
 import shutil
 import sys
 import tempfile
+import time
 
 import requests
 
@@ -169,16 +170,39 @@ def command_generate_build_number(options):
     Argument("pattern"),
 ])
 def command_latest_github_release(options):
-    response = requests.get(f"https://api.github.com/repos/{options.owner}/{options.repository}/releases/latest", headers={
-        'Accept': 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-    })
+
+    # Default API headers.
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+    # Use a GitHub token if it's present in the environment as this is likely to have fewer rate limits.
+    if "GITHUB_TOKEN" in os.environ:
+        headers["token"] = os.environ["GITHUB_TOKEN"]
+
+    # Fetch the required data with an exponential backoff (max 5m) if we hit a 403 rate limit.
+    sleep_duration_s = 2
+    while True:
+        response = requests.get(f"https://api.github.com/repos/{options.owner}/{options.repository}/releases/latest", headers=headers)
+        if response.status_code == 200:
+            break
+        elif response.status_code == 403:
+            logging.info(f"Waiting {sleep_duration_s}s for GitHub API rate limits...")
+            sleep_duration_s = min(300, sleep_duration_s * sleep_duration_s)
+            time.sleep(sleep_duration_s)
+            continue
+        else:
+            response.raise_for_status()
+
+    # Check the assets for the requested pattern.
     regex = re.compile(fnmatch.translate(options.pattern))
     for asset in response.json()["assets"]:
         if not regex.match(asset["name"]):
             continue
         print(asset["browser_download_url"])
         return
+
     exit(f"Failed to find asset with pattern '{options.pattern}'.")
 
 
