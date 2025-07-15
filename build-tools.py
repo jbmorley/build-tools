@@ -179,7 +179,7 @@ def command_latest_github_release(options):
 
     # Use a GitHub token if it's present in the environment as this is likely to have fewer rate limits.
     if "GITHUB_TOKEN" in os.environ:
-        headers["token"] = os.environ["GITHUB_TOKEN"]
+        headers["Authorization"] = f"Bearer {os.environ["GITHUB_TOKEN"]}"
 
     # Fetch the required data with an exponential backoff (max 5m) if we hit a 403 rate limit.
     sleep_duration_s = 2
