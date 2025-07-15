@@ -164,7 +164,7 @@ def command_generate_build_number(options):
     print(build_number)
 
 
-@command("latest-github-release", help="get the URL for an asset from the latest GitHub release matching a pattern", arguments=[
+@command("latest-github-release", help="get the URL for an asset from the latest GitHub release matching a pattern (respects `GITHUB_TOKEN` environment variable)", arguments=[
     Argument("owner"),
     Argument("repository"),
     Argument("pattern"),
