@@ -182,15 +182,16 @@ def command_latest_github_release(options):
         headers["Authorization"] = f"Bearer {os.environ["GITHUB_TOKEN"]}"
 
     # Fetch the required data with an exponential backoff (max 5m) if we hit a 403 rate limit.
-    sleep_duration_s = 2
+    attempt = 1
     while True:
         response = requests.get(f"https://api.github.com/repos/{options.owner}/{options.repository}/releases/latest", headers=headers)
         if response.status_code == 200:
             break
         elif response.status_code == 403:
+            sleep_duration_s = min(300, 2 ** attempt)
             logging.info(f"Waiting {sleep_duration_s}s for GitHub API rate limits...")
-            sleep_duration_s = min(300, sleep_duration_s * sleep_duration_s)
             time.sleep(sleep_duration_s)
+            attempt += 1
             continue
         else:
             response.raise_for_status()
