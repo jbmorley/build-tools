@@ -22,6 +22,7 @@
 
 import argparse
 import base64
+import contextlib
 import datetime
 import fnmatch
 import functools
@@ -154,8 +155,9 @@ def command_verify_notarized_zip(options):
             exit("Failed to verify bundle.")
 
 
-@command("notarize", help="notarize a macOS app", arguments=[
-    Argument("path", help="path to the zip file to notarize"),
+# TODO: Should take the app as input, and have an ouput zip name
+@command("notarize", help="notarize and staple a macOS app for distribution", arguments=[
+    Argument("path", help="path to the app bundle to notarize"),
     Argument("--key", required=True, help="path of the App Store Connect API key (required)"),
     Argument("--key-id", required=True, help="App Store Connect API key id (required)"),
     Argument("--issuer", required=True, help="App Store Connect API key issuer id (required)"),
@@ -163,19 +165,72 @@ def command_verify_notarized_zip(options):
 def command_notarize(options):
     path = os.path.abspath(options.path)
     key_path = os.path.abspath(options.key)
+
+    # Verify the app signature before continuing.
+    verify_signature(path)
+
+    with tempfile.TemporaryDirectory() as temporary_directory:
+
+        # Compress the app for submission.
+        zip_path = os.path.join(temporary_directory, "release.zip")
+        app_directory, app_basename = os.path.split(path)
+        with contextlib.chdir(app_directory):
+            subprocess.check_call([
+                "zip",
+                "--symlinks",
+                "-r"
+                zip_path,
+                app_basename,
+            ])
+
+        # Notarize.
+        output = subprocess.check_output([
+            "xcrun", "notarytool",
+            "submit", zip_path,
+            "--key", key_path,
+            "--key-id", options.key_id,
+            "--issuer", options.issuer,
+            "--output-format", "json",
+            "--wait",
+        ]).decode("utf-8")
+        response = json.loads(output)
+        response_id = response["id"]
+        response_status = response["status"]
+
+    # Download the log and write it to disk.
     output = subprocess.check_output([
-        "xcrun", "notarytool",
-        "submit", path,
-        "--key", key_path,
+        "xcrun", "notarytool", "log",
+        "--key" key_path,
         "--key-id", options.key_id,
         "--issuer", options.issuer,
-        "--output-format", "json",
-        "--wait",
+        response["id"],
+    ).decode("utf-8")
+    with open("notarization-log.json", "w") as fh:
+        fh.write(output)
+
+    # Check to see if we should continue.
+    if response["status"] != "Accepted":
+        exit("Failed to notarize app.")
+
+    # Staple and validate the app; this bakes the notarization into the app in case the device trying to run it can't do
+    # an online check with Apple's servers for some reason.
+    subprocess.check_call([
+        "xcrun", "stapler",
+        "staple", path,
     ])
-    response = json.loads(output)
-    response_id = response["id"]
-    response_status = response["status"]
-    print("***", response_id, response_status, "***")
+    subprocess.check_call([
+        "xcrun", "stapler",
+        "validate", path,
+    ])
+
+    # Next up, we perform a belt-and-braces check that the app validates after stapling.
+    verify_signature(path)
+
+
+def verify_signature(path):
+    subprocess.check_call([
+        "codesign", "--verify", "--deep", "--strict", "--verbose", "2", path,
+    ])
 
 
 @command("generate-build-number", help="synthesize a build number (YYmmddHHMM + 8 digit integer representation of a 6 digit Git SHA")
