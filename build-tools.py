@@ -137,6 +137,7 @@ def command_delete_keychain(options):
     subprocess.check_call(["security", "delete-keychain", path])
 
 
+# TODO: Is this used anywhere?
 @command("verify-notarized-zip", help="unpack a compressed Mac app and verify the notarization", arguments=[
     Argument("path", help="path to the zip file to verify")
 ])
@@ -151,6 +152,30 @@ def command_verify_notarized_zip(options):
         except subprocess.CalledProcessError as e:
             logging.error(e.stderr.decode("utf-8").strip())
             exit("Failed to verify bundle.")
+
+
+@command("notarize", help="notarize a macOS app", arguments=[
+    Argument("path", help="path to the zip file to notarize"),
+    Argument("--key", required=True, help="path of the App Store Connect API key (required)"),
+    Argument("--key-id", required=True, help="App Store Connect API key id (required)"),
+    Argument("--issuer", required=True, help="App Store Connect API key issuer id (required)"),
+])
+def command_notarize(options):
+    path = os.path.abspath(options.path)
+    key_path = os.path.abspath(options.key)
+    output = subprocess.check_output([
+        "xcrun", "notarytool",
+        "submit", path,
+        "--key", key_path,
+        "--key-id", options.key_id,
+        "--issuer", options.issuer,
+        "--output-format", "json",
+        "--wait",
+    ])
+    response = json.loads(output)
+    response_id = response["id"]
+    response_status = response["status"]
+    print("***", response_id, response_status, "***")
 
 
 @command("generate-build-number", help="synthesize a build number (YYmmddHHMM + 8 digit integer representation of a 6 digit Git SHA")
