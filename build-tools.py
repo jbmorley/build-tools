@@ -178,7 +178,7 @@ def command_notarize(options):
             subprocess.check_call([
                 "zip",
                 "--symlinks",
-                "-r"
+                "-r",
                 zip_path,
                 app_basename,
             ])
