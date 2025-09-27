@@ -155,7 +155,6 @@ def command_verify_notarized_zip(options):
             exit("Failed to verify bundle.")
 
 
-# TODO: Should take the app as input, and have an ouput zip name
 @command("notarize", help="notarize and staple a macOS app for distribution", arguments=[
     Argument("path", help="path to the app bundle to notarize"),
     Argument("--key", required=True, help="path of the App Store Connect API key (required)"),
