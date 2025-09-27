@@ -204,7 +204,7 @@ def command_notarize(options):
         "--key-id", options.key_id,
         "--issuer", options.issuer,
         response["id"],
-    ).decode("utf-8")
+    ]).decode("utf-8")
     with open("notarization-log.json", "w") as fh:
         fh.write(output)
 
