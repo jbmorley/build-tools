@@ -200,7 +200,7 @@ def command_notarize(options):
     # Download the log and write it to disk.
     output = subprocess.check_output([
         "xcrun", "notarytool", "log",
-        "--key" key_path,
+        "--key", key_path,
         "--key-id", options.key_id,
         "--issuer", options.issuer,
         response["id"],
