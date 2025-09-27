@@ -229,7 +229,7 @@ def command_notarize(options):
 
 def verify_signature(path):
     subprocess.check_call([
-        "codesign", "--verify", "--deep", "--strict", "--verbose", "2", path,
+        "codesign", "--verify", "--deep", "--strict", "--verbose=2", path,
     ])
 
 
