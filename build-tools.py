@@ -238,6 +238,9 @@ def verify_signature(path):
     subprocess.check_call([
         "codesign", "--verify", "--deep", "--strict", "--verbose=2", path,
     ])
+    subprocess.check_call([
+        "codesign", "--display", "-vvv", path,
+    ])
 
 
 @command("generate-build-number", help="synthesize a build number (YYmmddHHMM + 8 digit integer representation of a 6 digit Git SHA")
