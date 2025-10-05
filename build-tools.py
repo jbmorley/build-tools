@@ -160,7 +160,7 @@ def command_verify_notarized_zip(options):
     Argument("--key", required=True, help="path of the App Store Connect API key (required)"),
     Argument("--key-id", required=True, help="App Store Connect API key id (required)"),
     Argument("--issuer", required=True, help="App Store Connect API key issuer id (required)"),
-    Argument("--log", help="fetch the notarization log and save to the specified path")
+    Argument("--log", help="fetch the notarization log and save to the specified path"),
 ])
 def command_notarize(options):
     path = os.path.abspath(options.path)
