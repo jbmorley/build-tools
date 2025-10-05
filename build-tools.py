@@ -166,6 +166,7 @@ def command_notarize(options):
     key_path = os.path.abspath(options.key)
 
     # Verify the app signature before continuing.
+    logging.info("Verifying signature of '%s'...", path")
     verify_signature(path)
 
     with tempfile.TemporaryDirectory() as temporary_directory:
@@ -173,6 +174,7 @@ def command_notarize(options):
         # Compress the app for submission.
         zip_path = os.path.join(temporary_directory, "release.zip")
         app_directory, app_basename = os.path.split(path)
+        logging.info("Compressing '%s' to '%s'...", app_basename, zip_path)
         with contextlib.chdir(app_directory):
             subprocess.check_call([
                 "zip",
