@@ -166,7 +166,7 @@ def command_notarize(options):
     key_path = os.path.abspath(options.key)
 
     # Verify the app signature before continuing.
-    logging.info("Verifying signature of '%s'...", path")
+    logging.info("Verifying signature of '%s'...", path)
     verify_signature(path)
 
     with tempfile.TemporaryDirectory() as temporary_directory:
