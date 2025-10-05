@@ -160,10 +160,12 @@ def command_verify_notarized_zip(options):
     Argument("--key", required=True, help="path of the App Store Connect API key (required)"),
     Argument("--key-id", required=True, help="App Store Connect API key id (required)"),
     Argument("--issuer", required=True, help="App Store Connect API key issuer id (required)"),
+    Argument("--log", help="fetch the notarization log and save to the specified path")
 ])
 def command_notarize(options):
     path = os.path.abspath(options.path)
     key_path = os.path.abspath(options.key)
+    log_path = os.path.abspath(options.log) if options.log else None
 
     # Verify the app signature before continuing.
     logging.info("Verifying signature of '%s'...", path)
@@ -199,21 +201,18 @@ def command_notarize(options):
         response_id = response["id"]
         response_status = response["status"]
 
-    # Write the notarization result to file. 
-    with open("notarization-result.json", "w") as fh:
-        fh.write(output)
-
     # Download the log and write it to disk.
-    logging.info("Fetching notarization log with id '%s'...", response["id"])
-    output = subprocess.check_output([
-        "xcrun", "notarytool", "log",
-        "--key", key_path,
-        "--key-id", options.key_id,
-        "--issuer", options.issuer,
-        response["id"],
-    ]).decode("utf-8")
-    with open("notarization-log.json", "w") as fh:
-        fh.write(output)
+    if log_path is not None:
+        logging.info("Fetching notarization log with id '%s'...", response["id"])
+        output = subprocess.check_output([
+            "xcrun", "notarytool", "log",
+            "--key", key_path,
+            "--key-id", options.key_id,
+            "--issuer", options.issuer,
+            response["id"],
+        ]).decode("utf-8")
+        with open(log_path, "w") as fh:
+            fh.write(output)
 
     # Check to see if we should continue.
     if response["status"] != "Accepted":
