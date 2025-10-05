@@ -198,6 +198,8 @@ def command_notarize(options):
         response = json.loads(output)
         response_id = response["id"]
         response_status = response["status"]
+        with open("notarization-result.json", "w") as fh:
+            fh.write(output)
 
     # Download the log and write it to disk.
     logging.info("Fetching notarization log with id '%s'...", response["id"])
