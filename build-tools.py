@@ -160,12 +160,15 @@ def command_verify_notarized_zip(options):
     Argument("--key", required=True, help="path of the App Store Connect API key (required)"),
     Argument("--key-id", required=True, help="App Store Connect API key id (required)"),
     Argument("--issuer", required=True, help="App Store Connect API key issuer id (required)"),
+    Argument("--log", help="fetch the notarization log and save to the specified path"),
 ])
 def command_notarize(options):
     path = os.path.abspath(options.path)
     key_path = os.path.abspath(options.key)
+    log_path = os.path.abspath(options.log) if options.log else None
 
     # Verify the app signature before continuing.
+    logging.info("Verifying signature of '%s'...", path)
     verify_signature(path)
 
     with tempfile.TemporaryDirectory() as temporary_directory:
@@ -173,6 +176,7 @@ def command_notarize(options):
         # Compress the app for submission.
         zip_path = os.path.join(temporary_directory, "release.zip")
         app_directory, app_basename = os.path.split(path)
+        logging.info("Compressing '%s' to '%s'...", app_basename, zip_path)
         with contextlib.chdir(app_directory):
             subprocess.check_call([
                 "zip",
@@ -183,6 +187,7 @@ def command_notarize(options):
             ])
 
         # Notarize.
+        logging.info("Notarizing '%s'...", zip_path)
         output = subprocess.check_output([
             "xcrun", "notarytool",
             "submit", zip_path,
@@ -197,15 +202,17 @@ def command_notarize(options):
         response_status = response["status"]
 
     # Download the log and write it to disk.
-    output = subprocess.check_output([
-        "xcrun", "notarytool", "log",
-        "--key", key_path,
-        "--key-id", options.key_id,
-        "--issuer", options.issuer,
-        response["id"],
-    ]).decode("utf-8")
-    with open("notarization-log.json", "w") as fh:
-        fh.write(output)
+    if log_path is not None:
+        logging.info("Fetching notarization log with id '%s'...", response["id"])
+        output = subprocess.check_output([
+            "xcrun", "notarytool", "log",
+            "--key", key_path,
+            "--key-id", options.key_id,
+            "--issuer", options.issuer,
+            response["id"],
+        ]).decode("utf-8")
+        with open(log_path, "w") as fh:
+            fh.write(output)
 
     # Check to see if we should continue.
     if response["status"] != "Accepted":
@@ -229,6 +236,9 @@ def command_notarize(options):
 def verify_signature(path):
     subprocess.check_call([
         "codesign", "--verify", "--deep", "--strict", "--verbose=2", path,
+    ])
+    subprocess.check_call([
+        "codesign", "--display", "-vvv", path,
     ])
 
 
