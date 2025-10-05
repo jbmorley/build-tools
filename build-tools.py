@@ -185,6 +185,7 @@ def command_notarize(options):
             ])
 
         # Notarize.
+        logging.info("Notarizing '%s'...", zip_path)
         output = subprocess.check_output([
             "xcrun", "notarytool",
             "submit", zip_path,
@@ -199,6 +200,7 @@ def command_notarize(options):
         response_status = response["status"]
 
     # Download the log and write it to disk.
+    logging.info("Fetching notarization log with id '%s'...", response["id"])
     output = subprocess.check_output([
         "xcrun", "notarytool", "log",
         "--key", key_path,
