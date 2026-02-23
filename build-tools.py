@@ -155,7 +155,7 @@ def command_verify_notarized_zip(options):
 
 @command("generate-build-number", help="synthesize a build number (YYmmddHHMM + 8 digit integer representation of a 6 digit Git SHA")
 def command_generate_build_number(options):
-    utc_time = datetime.datetime.utcnow()
+    utc_time = datetime.datetime.now(datetime.UTC)
     # Unhelpfully, the '--short=length' option guarantees to give an object name _no shorter_ than the requested length
     # will happily, on occasion, return one that's longer, meaning we have to limit this to 6 characters ourselves.
     git_sha = subprocess.check_output(["git", "rev-parse", "--short=6", "HEAD"]).decode("utf-8").strip()[:6]
