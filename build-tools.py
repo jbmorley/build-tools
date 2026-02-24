@@ -27,6 +27,7 @@ import datetime
 import fnmatch
 import functools
 import glob
+import hashlib
 import json
 import logging
 import os
@@ -93,6 +94,21 @@ class CommandParser(object):
             logging.error("No command specified.")
             exit(1)
         options.fn(options)
+
+
+def shasum(path):
+    sha256 = hashlib.sha256()
+    if os.path.isdir(path):
+        for f in sorted(listdir(path, include_hidden=False)):
+            sha256.update(shasum(os.path.join(path, f)).encode('utf-8'))
+    else:
+        with open(path, 'rb') as f:
+            while True:
+                data = f.read(65536)
+                if not data:
+                    break
+                sha256.update(data)
+    return sha256.hexdigest()
 
 
 def list_keychains():
@@ -377,44 +393,83 @@ def command_install_provisioning_profile(options):
 
 
 @command("add-artifact", help="add an artifact to the artifact manifest", arguments=[
+
     Argument("manifest", help="manifest to create or update"),
+
     Argument("--project", required=True, help="id of the project to add; should be consistent across all artifacts for a specific project"),
     Argument("--version", required=True, help="version of the project"),
     Argument("--build-number", required=True, help="build number of the project"),
-    Argument("--sha", required=True, help="git sha associated with the artifact"),
-    Argument("--os", required=True, choices=["macos", "debian", "ubuntu"], help="os (one of macos, debian, or ubuntu)"),
-    Argument("--os-version", required=True, help="os version (e.g., 26, 24.04, etc)"),
-    Argument("--os-codename", required=True, help="os codename (e.g., tahoe, noble, etc); repeat the os version if not relevant"),
-    Argument("--architecture", required=True, choices=["all", "arm64", "aarch64", "x86_64"], help="target os architecture"),
+
     Argument("--name", help="filename of the asset; inferred from the path if not provided"),
     Argument("--path", required=True, help="path to the artifact (relative or absolute); in the case of GitHub releases this should be the assset filename"),
-    Argument("--format", required=True, choices=["deb", "pkg", "zip"], help="artifact format (deb|pkg|zip)"),
+    Argument("--format", required=True, choices=["deb", "pkg", "zip"], help="artifact format"),
+    Argument("--git-sha", required=True, help="git sha associated with the artifact"),
+
+    Argument("--supports-os", required=True, choices=["macos", "debian", "ubuntu"], help="supported os"),
+    Argument("--supports-version", required=True, help="supported os version (e.g., 26, 24.04, etc)"),
+    Argument("--supports-codename", required=True, help="supported os codename (e.g., tahoe, noble, etc); repeat the os version if not relevant"),
+    Argument("--supports-architecture", required=True, choices=["arm64", "aarch64", "x86_64"], action="append", default=[], help="supported os architecture (specify one-or-more)"),
 ])
 def command_add_artifact(options):
     manifest_path = os.path.abspath(options.manifest)
+    artifact_path = os.path.abspath(options.path)
 
     # Load any existing manifest.
-    manifest = []
+    manifest = {
+        "version": 1,
+        "artifacts": [],
+    }
     if os.path.exists(manifest_path):
         with open(manifest_path, "r") as fh:
             manifest = json.load(fh)
 
+    if "version" not in manifest or manifest["version"] != 1:
+        exit("Unsupported manifest version.")
+
     name = options.name if options.name else os.path.basename(options.path)
 
-    # Append the new artifact.
-    manifest.append({
-        "project": options.project,
-        "version": options.version,
-        "build_number": options.build_number,
-        "sha": options.sha,
-        "os": options.os,
-        "os_version": options.os_version,
-        "os_codename": options.os_codename,
-        "architecture": options.architecture,
-        "name": name,
-        "path": options.path,
-        "format": options.format,
-    })
+    sha256 = shasum(artifact_path)
+
+    supports = []
+    for architecture in options.supports_architecture:
+        supports.append({
+            "os": options.supports_os,
+            "version": options.supports_version,
+            "codename": options.supports_codename,
+            "architecture": architecture,
+        })
+
+    # Look for an existing artifact to update with additional target information.
+    found_artifact = False
+    for artifact in manifest["artifacts"]:
+        if (artifact["project"] == options.project and
+            artifact["version"] == options.version and
+            artifact["build_number"] == options.build_number and
+            artifact["sha256"] == sha256 and
+            artifact["name"] == name and
+            artifact["path"] == options.path and
+            artifact["format"] == options.format and
+            artifact["git_sha"] == options.git_sha):
+
+            artifact["supports"].extend(supports)
+            found_artifact = True
+            break
+
+    # If we weren't able to find an artifact to update, then we create a new one.
+    if not found_artifact:
+        manifest["artifacts"].append({
+            "project": options.project,
+            "version": options.version,
+            "build_number": options.build_number,
+
+            "sha256": sha256,
+            "name": name,
+            "path": options.path,
+            "format": options.format,
+            "git_sha": options.git_sha,
+
+            "supports": supports,
+        })
 
     # Write the updated manifest.
     with open(manifest_path, "w") as fh:
