@@ -376,6 +376,52 @@ def command_install_provisioning_profile(options):
         shutil.copy(path, destination_path)
 
 
+@command("add-artifact", help="add an artifact to the artifact manifest", arguments=[
+    Argument("manifest", help="manifest to create or update"),
+    Argument("--project", required=True, help="id of the project to add; should be consistent across all artifacts for a specific project"),
+    Argument("--version", required=True, help="version of the project"),
+    Argument("--build-number", required=True, help="build number of the project"),
+    Argument("--sha", required=True, help="git sha associated with the artifact"),
+    Argument("--os", required=True, choices=["macos", "debian", "ubuntu"], help="os (one of macos, debian, or ubuntu)"),
+    Argument("--os-version", required=True, help="os version (e.g., 26, 24.04, etc)"),
+    Argument("--os-codename", required=True, help="os codename (e.g., tahoe, noble, etc); repeat the os version if not relevant"),
+    Argument("--architecture", required=True, choices=["all", "arm64", "aarch64", "x86_64"], help="target os architecture"),
+    Argument("--name", help="filename of the asset; inferred from the path if not provided"),
+    Argument("--path", required=True, help="path to the artifact (relative or absolute); in the case of GitHub releases this should be the assset filename"),
+    Argument("--format", required=True, choices=["deb", "pkg", "zip"], help="artifact format (deb|pkg|zip)"),
+])
+def command_add_artifact(options):
+    manifest_path = os.path.abspath(options.manifest)
+
+    # Load any existing manifest.
+    manifest = []
+    if os.path.exists(manifest_path):
+        with open(manifest_path, "r") as fh:
+            manifest = json.load(fh)
+
+    name = options.name if options.name else os.path.basename(options.path)
+
+    # Append the new artifact.
+    manifest.append({
+        "project": options.project,
+        "version": options.version,
+        "build_number": options.build_number,
+        "sha": options.sha,
+        "os": options.os,
+        "os_version": options.os_version,
+        "os_codename": options.os_codename,
+        "architecture": options.architecture,
+        "name": name,
+        "path": options.path,
+        "format": options.format,
+    })
+
+    # Write the updated manifest.
+    with open(manifest_path, "w") as fh:
+        json.dump(manifest, fh, indent=4)
+        fh.write("\n")
+
+
 def main():
     parser = CommandParser(description="Create and register a temporary keychain for development")
     parser.run()
