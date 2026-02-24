@@ -161,6 +161,7 @@ def command_verify_notarized_zip(options):
     Argument("--key-id", required=True, help="App Store Connect API key id (required)"),
     Argument("--issuer", required=True, help="App Store Connect API key issuer id (required)"),
     Argument("--log", help="fetch the notarization log and save to the specified path"),
+    Argument("--skip-staple", action="store_true", default=False, help="skip stapling (useful for CLI apps)"),
 ])
 def command_notarize(options):
     path = os.path.abspath(options.path)
@@ -220,14 +221,15 @@ def command_notarize(options):
 
     # Staple and validate the app; this bakes the notarization into the app in case the device trying to run it can't do
     # an online check with Apple's servers for some reason.
-    subprocess.check_call([
-        "xcrun", "stapler",
-        "staple", path,
-    ])
-    subprocess.check_call([
-        "xcrun", "stapler",
-        "validate", path,
-    ])
+    if not options.skip_staple:
+        subprocess.check_call([
+            "xcrun", "stapler",
+            "staple", path,
+        ])
+        subprocess.check_call([
+            "xcrun", "stapler",
+            "validate", path,
+        ])
 
     # Next up, we perform a belt-and-braces check that the app validates after stapling.
     verify_signature(path)
