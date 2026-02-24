@@ -408,7 +408,7 @@ def command_install_provisioning_profile(options):
     Argument("--supports-os", required=True, choices=["macos", "debian", "ubuntu"], help="supported os"),
     Argument("--supports-version", required=True, help="supported os version (e.g., 26, 24.04, etc)"),
     Argument("--supports-codename", required=True, help="supported os codename (e.g., tahoe, noble, etc); repeat the os version if not relevant"),
-    Argument("--supports-architecture", required=True, choices=["arm64", "aarch64", "x86_64"], action="append", default=[], help="supported os architecture (specify one-or-more)"),
+    Argument("--supports-architecture", required=True, choices=["arm64", "aarch64", "x86_64", "amd64"], action="append", default=[], help="supported os architecture (specify one-or-more)"),
 ])
 def command_add_artifact(options):
     manifest_path = os.path.abspath(options.manifest)
