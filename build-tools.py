@@ -193,8 +193,7 @@ def command_notarize(options):
             log_path = os.path.join(log_directory, f"{os.path.basename(path)}-notarization-log.json")
         notarize(path, key_path=key_path, key_id=options.key_id, issuer=options.issuer, log_path=log_path)
 
-    # Notarize every path concurrently; waiting on Apple's notarization service is typically the slowest part of this,
-    # and each submission is independent, so running them in parallel avoids paying for that wait N times over.
+    # Notarize in parallel since Apple's servers are slow.
     errors = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(paths)) as executor:
         futures = {executor.submit(notarize_path, path): path for path in paths}
