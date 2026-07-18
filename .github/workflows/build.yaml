@@ -42,6 +42,24 @@ jobs:
     - name: Source-only smoke test
       run: scripts/smoke-test.sh
 
+  keychain-test:
+    runs-on: macos-latest
+
+    steps:
+
+    - name: Checkout repository
+      uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+
+    - name: Install Python dependencies
+      run: |
+        python3 -m pip install --upgrade pipenv wheel
+        pipenv install
+
+    - name: Test the create-keychain command
+      run: scripts/test-keychain.sh
+
   build:
     runs-on: ubuntu-latest
     permissions:
@@ -74,7 +92,7 @@ jobs:
         path: dist/
 
     - name: Test wheel
-      run: scripts/test_wheel.sh
+      run: scripts/test-wheel.sh
 
     - name: Create release
       run: scripts/release.sh
