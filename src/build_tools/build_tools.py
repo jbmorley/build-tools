@@ -22,6 +22,7 @@
 
 import argparse
 import base64
+import concurrent.futures
 import contextlib
 import datetime
 import fnmatch
@@ -171,18 +172,45 @@ def command_verify_notarized_zip(options):
             exit("Failed to verify bundle.")
 
 
-@command("notarize", help="notarize and staple a macOS app for distribution", arguments=[
-    Argument("path", help="path to the app bundle to notarize"),
+@command("notarize", help="notarize (and staple where appropriate) one or more macOS build artifacts for distribution", arguments=[
+    Argument("path", nargs="+", help="path to the app bundle or binary to notarize"),
     Argument("--key", required=True, help="path of the App Store Connect API key (required)"),
     Argument("--key-id", required=True, help="App Store Connect API key id (required)"),
     Argument("--issuer", required=True, help="App Store Connect API key issuer id (required)"),
-    Argument("--log", help="fetch the notarization log and save to the specified path"),
-    Argument("--skip-staple", action="store_true", default=False, help="skip stapling (useful for CLI apps)"),
+    Argument("--log-directory", help="write a notarization log for each path to this directory"),
 ])
 def command_notarize(options):
-    path = os.path.abspath(options.path)
     key_path = os.path.abspath(options.key)
-    log_path = os.path.abspath(options.log) if options.log else None
+    log_directory = os.path.abspath(options.log_directory) if options.log_directory else None
+    if log_directory is not None:
+        os.makedirs(log_directory, exist_ok=True)
+
+    paths = [os.path.abspath(path) for path in options.path]
+
+    def notarize_path(path):
+        log_path = None
+        if log_directory is not None:
+            log_path = os.path.join(log_directory, f"{os.path.basename(path)}-notarization-log.json")
+        notarize(path, key_path=key_path, key_id=options.key_id, issuer=options.issuer, log_path=log_path)
+
+    # Notarize in parallel since Apple's servers are slow.
+    errors = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(paths)) as executor:
+        futures = {executor.submit(notarize_path, path): path for path in paths}
+        for future in concurrent.futures.as_completed(futures):
+            path = futures[future]
+            try:
+                future.result()
+            except Exception as e:
+                errors[path] = e
+
+    if errors:
+        for path, error in errors.items():
+            logging.error("Failed to notarize '%s': %s", path, error)
+        exit(f"Failed to notarize {len(errors)} of {len(paths)} artifact(s).")
+
+
+def notarize(path, key_path, key_id, issuer, log_path=None):
 
     # Verify the app signature before continuing.
     logging.info("Verifying signature of '%s'...", path)
@@ -209,14 +237,12 @@ def command_notarize(options):
             "xcrun", "notarytool",
             "submit", zip_path,
             "--key", key_path,
-            "--key-id", options.key_id,
-            "--issuer", options.issuer,
+            "--key-id", key_id,
+            "--issuer", issuer,
             "--output-format", "json",
             "--wait",
         ]).decode("utf-8")
         response = json.loads(output)
-        response_id = response["id"]
-        response_status = response["status"]
 
     # Download the log and write it to disk.
     if log_path is not None:
@@ -224,8 +250,8 @@ def command_notarize(options):
         output = subprocess.check_output([
             "xcrun", "notarytool", "log",
             "--key", key_path,
-            "--key-id", options.key_id,
-            "--issuer", options.issuer,
+            "--key-id", key_id,
+            "--issuer", issuer,
             response["id"],
         ]).decode("utf-8")
         with open(log_path, "w") as fh:
@@ -233,11 +259,11 @@ def command_notarize(options):
 
     # Check to see if we should continue.
     if response["status"] != "Accepted":
-        exit("Failed to notarize app.")
+        raise RuntimeError(f"notarization status was '{response['status']}', expected 'Accepted'")
 
-    # Staple and validate the app; this bakes the notarization into the app in case the device trying to run it can't do
+    # Staple and validate bundles; this bakes the notarization into the app in case the device trying to run it can't do
     # an online check with Apple's servers for some reason.
-    if not options.skip_staple:
+    if os.path.isdir(path):
         subprocess.check_call([
             "xcrun", "stapler",
             "staple", path,
