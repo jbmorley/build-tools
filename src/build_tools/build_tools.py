@@ -119,7 +119,7 @@ def list_keychains():
 
 
 def create_keychain(path, password):
-    subprocess.check_call(["security", "create-keychain", "-p", "12345678", path])
+    subprocess.check_call(["security", "create-keychain", "-p", password, path])
     subprocess.check_call(["security", "set-keychain-settings", "-lut", "21600", path])
 
 
