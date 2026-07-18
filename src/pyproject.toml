@@ -11,6 +11,7 @@ authors = [
   {name = "Jason Morley", email = "hello@jbmorley.co.uk"}
 ]
 dependencies = [
+  "fastcommand",
   "requests",
 ]
 dynamic = ["version"]
