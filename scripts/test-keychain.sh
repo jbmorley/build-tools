@@ -53,7 +53,9 @@ trap cleanup EXIT
 
 # Check we respect provided passwords.
 printf '%s' "$PASSWORD" | "$BUILD_TOOLS" create-keychain --password "$PROVIDED_KEYCHAIN"
+security lock-keychain "$PROVIDED_KEYCHAIN"
 security unlock-keychain -p "$PASSWORD" "$PROVIDED_KEYCHAIN"
+security lock-keychain "$PROVIDED_KEYCHAIN"
 if security unlock-keychain -p "wrong-$PASSWORD" "$PROVIDED_KEYCHAIN" 2> /dev/null ; then
     echo "Keychain unlocked with an incorrect password; the provided password was not honoured."
     exit 1
