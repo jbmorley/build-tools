@@ -52,10 +52,13 @@ jobs:
       with:
         fetch-depth: 0
 
-    - name: Install Python dependencies
-      run: |
-        python3 -m pip install --upgrade pipenv wheel
-        pipenv install
+    - name: Install the tool dependencies
+      uses: jdx/mise-action@v4
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Install dependencies
+      run: scripts/install-dependencies.sh
 
     - name: Test the create-keychain command
       run: scripts/test-keychain.sh

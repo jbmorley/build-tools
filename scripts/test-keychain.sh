@@ -29,8 +29,11 @@ set -o pipefail
 set -x
 set -u
 
-ROOT_DIRECTORY="$( cd "$( dirname "$( dirname "${BASH_SOURCE[0]}" )" )" &> /dev/null && pwd )"
+SCRIPTS_DIRECTORY="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+ROOT_DIRECTORY="$( cd "$SCRIPTS_DIRECTORY/.." &> /dev/null && pwd )"
 BUILD_TOOLS="$ROOT_DIRECTORY/build-tools"
+
+source "$SCRIPTS_DIRECTORY/environment.sh"
 
 WORK_DIRECTORY="$(mktemp -d)"
 RANDOM_KEYCHAIN="$WORK_DIRECTORY/random.keychain"
