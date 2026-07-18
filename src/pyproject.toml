@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta:__legacy__"
+
+[project]
+name = "inseven-build-tools"
+readme = "README.md"
+license = "MIT"
+authors = [
+  {name = "Jason Morley", email = "hello@jbmorley.co.uk"}
+]
+dependencies = [
+  "requests",
+]
+dynamic = ["version"]
+
+[project.scripts]
+build-tools = "build_tools.build_tools:main"

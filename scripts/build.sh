@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) 2018-2025 Jason Morley
+# Copyright (c) 2018-2026 Jason Morley
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -20,8 +20,40 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-ROOT_DIRECTORY="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+set -e
+set -o pipefail
+set -x
+set -u
+
+ROOT_DIRECTORY="$( cd "$( dirname "$( dirname "${BASH_SOURCE[0]}" )" )" &> /dev/null && pwd )"
+BUILD_DIRECTORY="$ROOT_DIRECTORY/dist"
 SOURCE_DIRECTORY="$ROOT_DIRECTORY/src"
 
-export PIPENV_PIPFILE="$ROOT_DIRECTORY/Pipfile"
-PYTHONPATH="$SOURCE_DIRECTORY" pipenv run python3 -m build_tools "$@"
+CHANGES_SCRIPT="pipenv run changes"
+
+# Configure the path.
+PATH=$PATH:"$ROOT_DIRECTORY"
+
+# Write outputs to /dev/null if we're not running under GitHub Actions.
+GITHUB_OUTPUT="${GITHUB_OUTPUT:-/dev/null}"
+
+# Clean up and recreate the output directories.
+if [ -d "$BUILD_DIRECTORY" ] ; then
+    rm -r "$BUILD_DIRECTORY"
+fi
+mkdir -p "$BUILD_DIRECTORY"
+
+# Determine the version.
+export VERSION=$($CHANGES_SCRIPT version)
+export RELEASED_VERSION=$($CHANGES_SCRIPT version --released)
+
+# Build the package.
+cd "$SOURCE_DIRECTORY"
+pipenv run python -m build -o "$BUILD_DIRECTORY"
+
+# Check if the package needs a release and report it to GitHub Actions.
+if [[ "$VERSION" == "$RELEASED_VERSION" ]]; then
+    echo "needs_release=false" >> "$GITHUB_OUTPUT"
+else
+    echo "needs_release=true" >> "$GITHUB_OUTPUT"
+fi

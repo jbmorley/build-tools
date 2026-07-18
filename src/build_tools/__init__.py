@@ -1,5 +1,3 @@
-#!/bin/bash
-
 # Copyright (c) 2018-2025 Jason Morley
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -20,8 +18,4 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-ROOT_DIRECTORY="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-SOURCE_DIRECTORY="$ROOT_DIRECTORY/src"
-
-export PIPENV_PIPFILE="$ROOT_DIRECTORY/Pipfile"
-PYTHONPATH="$SOURCE_DIRECTORY" pipenv run python3 -m build_tools "$@"
+from . import *

@@ -1,0 +1,5 @@
+*.egg-info
+/build
+/dist
+/.local-smoke-test
+/Pipfile.lock
