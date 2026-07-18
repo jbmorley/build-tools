@@ -4,6 +4,7 @@ build-backend = "setuptools.build_meta:__legacy__"
 
 [project]
 name = "inseven-build-tools"
+description = "Collection of convenience build tools"
 readme = "README.md"
 license = "MIT"
 authors = [
