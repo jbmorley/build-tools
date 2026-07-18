@@ -20,13 +20,11 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import argparse
 import base64
 import concurrent.futures
 import contextlib
 import datetime
 import fnmatch
-import functools
 import glob
 import hashlib
 import json
@@ -40,6 +38,7 @@ import sys
 import tempfile
 import time
 
+import fastcommand
 import requests
 
 from xml.dom import minidom
@@ -49,52 +48,6 @@ logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO, format="[%
 
 
 PROFILES_DIRECTORY = os.path.expanduser("~/Library/MobileDevice/Provisioning Profiles")
-
-COMMANDS = {}
-
-
-class Command(object):
-
-    def __init__(self, name, help, arguments, callback):
-        self.name = name
-        self.help = help
-        self.arguments = arguments
-        self.callback = callback
-
-class Argument(object):
-
-    def __init__(self, *args, **kwargs):
-        self.args = args
-        self.kwargs = kwargs
-
-
-def command(name, help="", arguments=[]):
-    def wrapper(fn):
-        @functools.wraps(fn)
-        def inner(*args, **kwargs):
-            return fn(*args, **kwargs)
-        COMMANDS[name] = Command(name, help, arguments, inner)
-        return inner
-    return wrapper
-
-
-class CommandParser(object):
-
-    def __init__(self, *args, **kwargs):
-        self.parser = argparse.ArgumentParser(*args, **kwargs)
-        subparsers = self.parser.add_subparsers(help="command")
-        for name, command in COMMANDS.items():
-            subparser = subparsers.add_parser(command.name, help=command.help)
-            for argument in command.arguments:
-                subparser.add_argument(*(argument.args), **(argument.kwargs))
-            subparser.set_defaults(fn=command.callback)
-
-    def run(self):
-        options = self.parser.parse_args()
-        if 'fn' not in options:
-            logging.error("No command specified.")
-            exit(1)
-        options.fn(options)
 
 
 def shasum(path):
@@ -131,9 +84,9 @@ def add_keychain(path):
     subprocess.check_call(["security", "list-keychains", "-d", "user", "-s"] + list_keychains() + [path])
 
 
-@command("create-keychain", help="safely create a temporary keychain", arguments=[
-    Argument("path", help="path at which to create the keychain"),
-    Argument("--password", "-p", action="store_true", default=False, help="read password from stdin")
+@fastcommand.command("create-keychain", help="safely create a temporary keychain", arguments=[
+    fastcommand.Argument("path", help="path at which to create the keychain"),
+    fastcommand.Argument("--password", "-p", action="store_true", default=False, help="read password from stdin")
 ])
 def command_create_keychain(options):
     path = os.path.abspath(options.path)
@@ -146,8 +99,8 @@ def command_create_keychain(options):
     unlock_keychain(path, password)
 
 
-@command("delete-keychain", help="safely delete a temporary keychain removing it from the active set", arguments=[
-    Argument("path", help="path of the keychain to delete")
+@fastcommand.command("delete-keychain", help="safely delete a temporary keychain removing it from the active set", arguments=[
+    fastcommand.Argument("path", help="path of the keychain to delete")
 ])
 def command_delete_keychain(options):
     path = os.path.abspath(options.path)
@@ -156,8 +109,8 @@ def command_delete_keychain(options):
 
 
 # TODO: Is this used anywhere?
-@command("verify-notarized-zip", help="unpack a compressed Mac app and verify the notarization", arguments=[
-    Argument("path", help="path to the zip file to verify")
+@fastcommand.command("verify-notarized-zip", help="unpack a compressed Mac app and verify the notarization", arguments=[
+    fastcommand.Argument("path", help="path to the zip file to verify")
 ])
 def command_verify_notarized_zip(options):
     path = os.path.abspath(options.path)
@@ -172,12 +125,12 @@ def command_verify_notarized_zip(options):
             exit("Failed to verify bundle.")
 
 
-@command("notarize", help="notarize (and staple where appropriate) one or more macOS build artifacts for distribution", arguments=[
-    Argument("path", nargs="+", help="path to the app bundle or binary to notarize"),
-    Argument("--key", required=True, help="path of the App Store Connect API key (required)"),
-    Argument("--key-id", required=True, help="App Store Connect API key id (required)"),
-    Argument("--issuer", required=True, help="App Store Connect API key issuer id (required)"),
-    Argument("--log-directory", help="write a notarization log for each path to this directory"),
+@fastcommand.command("notarize", help="notarize (and staple where appropriate) one or more macOS build artifacts for distribution", arguments=[
+    fastcommand.Argument("path", nargs="+", help="path to the app bundle or binary to notarize"),
+    fastcommand.Argument("--key", required=True, help="path of the App Store Connect API key (required)"),
+    fastcommand.Argument("--key-id", required=True, help="App Store Connect API key id (required)"),
+    fastcommand.Argument("--issuer", required=True, help="App Store Connect API key issuer id (required)"),
+    fastcommand.Argument("--log-directory", help="write a notarization log for each path to this directory"),
 ])
 def command_notarize(options):
     key_path = os.path.abspath(options.key)
@@ -286,7 +239,7 @@ def verify_signature(path):
     ])
 
 
-@command("generate-build-number", help="synthesize a build number (YYmmddHHMM + 8 digit integer representation of a 6 digit Git SHA")
+@fastcommand.command("generate-build-number", help="synthesize a build number (YYmmddHHMM + 8 digit integer representation of a 6 digit Git SHA")
 def command_generate_build_number(options):
     utc_time = datetime.datetime.now(datetime.UTC)
     # Unhelpfully, the '--short=length' option guarantees to give an object name _no shorter_ than the requested length
@@ -297,10 +250,10 @@ def command_generate_build_number(options):
     print(build_number)
 
 
-@command("latest-github-release", help="get the URL for an asset from the latest GitHub release matching a pattern (respects `GITHUB_TOKEN` environment variable)", arguments=[
-    Argument("owner"),
-    Argument("repository"),
-    Argument("pattern"),
+@fastcommand.command("latest-github-release", help="get the URL for an asset from the latest GitHub release matching a pattern (respects `GITHUB_TOKEN` environment variable)", arguments=[
+    fastcommand.Argument("owner"),
+    fastcommand.Argument("repository"),
+    fastcommand.Argument("pattern"),
 ])
 def command_latest_github_release(options):
 
@@ -340,8 +293,8 @@ def command_latest_github_release(options):
     exit(f"Failed to find asset with pattern '{options.pattern}'.")
 
 
-@command("parse-build-number", help="parse a build nunmber to retrieve the date and Git SHA", arguments=[
-    Argument("build", help="build number to parse")
+@fastcommand.command("parse-build-number", help="parse a build nunmber to retrieve the date and Git SHA", arguments=[
+    fastcommand.Argument("build", help="build number to parse")
 ])
 def command_synthesize_build_number(options):
     date_string, sha_string = options.build[:10], options.build[10:]
@@ -351,10 +304,10 @@ def command_synthesize_build_number(options):
     print(sha)
 
 
-@command("import-base64-certificate", help="import base64 encoded certificate to a specific keychain", arguments=[
-    Argument("path", help="path of the keychain to update"),
-    Argument("certificate", help="base64 encoded PKCS12 (.p12) certificate"),
-    Argument("--password", "-p", action="store_true", default=False, help="read password from stdin"),
+@fastcommand.command("import-base64-certificate", help="import base64 encoded certificate to a specific keychain", arguments=[
+    fastcommand.Argument("path", help="path of the keychain to update"),
+    fastcommand.Argument("certificate", help="base64 encoded PKCS12 (.p12) certificate"),
+    fastcommand.Argument("--password", "-p", action="store_true", default=False, help="read password from stdin"),
 ])
 def command_import_certificate(options):
 
@@ -382,8 +335,8 @@ def command_import_certificate(options):
         subprocess.check_call(parameters)
 
 
-@command("install-provisioning-profile", help="install provisioining profile for the current user", arguments=[
-    Argument("path", nargs="+", help="path of profile to install"),
+@fastcommand.command("install-provisioning-profile", help="install provisioining profile for the current user", arguments=[
+    fastcommand.Argument("path", nargs="+", help="path of profile to install"),
 ])
 def command_install_provisioning_profile(options):
     for path in options.path:
@@ -418,23 +371,23 @@ def command_install_provisioning_profile(options):
         shutil.copy(path, destination_path)
 
 
-@command("add-artifact", help="add an artifact to the artifact manifest", arguments=[
+@fastcommand.command("add-artifact", help="add an artifact to the artifact manifest", arguments=[
 
-    Argument("manifest", help="manifest to create or update"),
+    fastcommand.Argument("manifest", help="manifest to create or update"),
 
-    Argument("--project", required=True, help="id of the project to add; should be consistent across all artifacts for a specific project"),
-    Argument("--version", required=True, help="version of the project"),
-    Argument("--build-number", required=True, help="build number of the project"),
+    fastcommand.Argument("--project", required=True, help="id of the project to add; should be consistent across all artifacts for a specific project"),
+    fastcommand.Argument("--version", required=True, help="version of the project"),
+    fastcommand.Argument("--build-number", required=True, help="build number of the project"),
 
-    Argument("--name", help="filename of the asset; inferred from the path if not provided"),
-    Argument("--path", required=True, help="path to the artifact (relative or absolute); in the case of GitHub releases this should be the assset filename"),
-    Argument("--format", required=True, choices=["deb", "pkg", "zip"], help="artifact format"),
-    Argument("--git-sha", required=True, help="git sha associated with the artifact"),
+    fastcommand.Argument("--name", help="filename of the asset; inferred from the path if not provided"),
+    fastcommand.Argument("--path", required=True, help="path to the artifact (relative or absolute); in the case of GitHub releases this should be the assset filename"),
+    fastcommand.Argument("--format", required=True, choices=["deb", "pkg", "zip"], help="artifact format"),
+    fastcommand.Argument("--git-sha", required=True, help="git sha associated with the artifact"),
 
-    Argument("--supports-os", required=True, choices=["macos", "debian", "ubuntu"], help="supported os"),
-    Argument("--supports-version", required=True, help="supported os version (e.g., 26, 24.04, etc)"),
-    Argument("--supports-codename", required=True, help="supported os codename (e.g., tahoe, noble, etc); repeat the os version if not relevant"),
-    Argument("--supports-architecture", required=True, choices=["arm64", "aarch64", "x86_64", "amd64"], action="append", default=[], help="supported os architecture (specify one-or-more)"),
+    fastcommand.Argument("--supports-os", required=True, choices=["macos", "debian", "ubuntu"], help="supported os"),
+    fastcommand.Argument("--supports-version", required=True, help="supported os version (e.g., 26, 24.04, etc)"),
+    fastcommand.Argument("--supports-codename", required=True, help="supported os codename (e.g., tahoe, noble, etc); repeat the os version if not relevant"),
+    fastcommand.Argument("--supports-architecture", required=True, choices=["arm64", "aarch64", "x86_64", "amd64"], action="append", default=[], help="supported os architecture (specify one-or-more)"),
 ])
 def command_add_artifact(options):
     manifest_path = os.path.abspath(options.manifest)
@@ -504,7 +457,7 @@ def command_add_artifact(options):
 
 
 def main():
-    parser = CommandParser(description="Create and register a temporary keychain for development")
+    parser = fastcommand.CommandParser(description="Create and register a temporary keychain for development")
     parser.run()
 
 
