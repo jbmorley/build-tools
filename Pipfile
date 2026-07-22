@@ -6,7 +6,7 @@ verify_ssl = true
 
 [packages]
 
-fastcommand = "*"
+fastcommand = ">=0.2.0"
 requests = "*"
 
 [dev-packages]
