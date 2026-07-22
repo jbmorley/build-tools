@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# PYTHON_ARGCOMPLETE_OK
+
 # Copyright (c) 2018-2025 Jason Morley
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
