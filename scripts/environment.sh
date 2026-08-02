@@ -35,5 +35,3 @@ export PIPENV_IGNORE_VIRTUALENVS=1
 export PIPENV_VENV_IN_PROJECT=0
 export PIPENV_PIPFILE="$ROOT_DIRECTORY/Pipfile"
 
-# Activate mise so the tool versions pinned in `.tool-versions` are on the path.
-eval "$(mise activate bash)"
