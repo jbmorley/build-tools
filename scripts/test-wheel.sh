@@ -27,5 +27,11 @@ set -u
 
 WHEEL=`ls dist/inseven_build_tools-*.whl`
 
-pip3 install "$WHEEL"
-which build-tools
+# Install the wheel into a throwaway virtual environment to check that it
+# actually provides a working `build-tools` entry point.
+WORK_DIRECTORY="$(mktemp -d)"
+trap 'rm -rf "$WORK_DIRECTORY"' EXIT
+
+python3 -m venv "$WORK_DIRECTORY/venv"
+"$WORK_DIRECTORY/venv/bin/pip" install "$WHEEL"
+"$WORK_DIRECTORY/venv/bin/build-tools" --help

@@ -9,11 +9,6 @@ verify_ssl = true
 fastcommand = ">=0.2.0"
 requests = "*"
 
-[dev-packages]
-
-build = "*"
-changes-semver = "*"
-
 [requires]
 
 python_version = "3.12"
