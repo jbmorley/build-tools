@@ -31,4 +31,4 @@ RELEASE_SCRIPT="$SCRIPTS_DIRECTORY/gh-release.sh"
 
 WHEEL=`ls dist/inseven_build_tools-*.whl`
 
-pipenv run changes --verbose release --skip-if-empty --push --exec "$RELEASE_SCRIPT" "$WHEEL"
+changes --verbose release --skip-if-empty --push --exec "$RELEASE_SCRIPT" "$WHEEL"

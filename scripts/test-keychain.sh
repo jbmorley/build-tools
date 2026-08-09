@@ -33,7 +33,9 @@ SCRIPTS_DIRECTORY="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd 
 ROOT_DIRECTORY="$( cd "$SCRIPTS_DIRECTORY/.." &> /dev/null && pwd )"
 BUILD_TOOLS="$ROOT_DIRECTORY/build-tools"
 
-source "$SCRIPTS_DIRECTORY/environment.sh"
+# Install the Python dependencies needed to run `build-tools` from source.
+cd "$ROOT_DIRECTORY"
+pipenv install
 
 WORK_DIRECTORY="$(mktemp -d)"
 RANDOM_KEYCHAIN="$WORK_DIRECTORY/random.keychain"
