@@ -372,7 +372,7 @@ def command_github_releases(options):
         # Promote the version number, build number, sha, and date if all artifacts agree.
         if len(artifacts) > 0:
             for key in ["version", "build_number", "sha_short", "date", "time_zone", "commit_url"]:
-                values = {artifact.get(key, None) for artifact in artifacts}
+                values = {artifact[key] for artifact in artifacts if key in artifact}
                 value = values.pop() if len(values) == 1 else None
                 if value is None:
                     continue
