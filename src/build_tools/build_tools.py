@@ -21,10 +21,12 @@
 # SOFTWARE.
 
 import base64
+import collections
 import concurrent.futures
 import contextlib
 import datetime
 import fnmatch
+import functools
 import glob
 import hashlib
 import json
@@ -37,6 +39,8 @@ import shutil
 import sys
 import tempfile
 import time
+
+from dataclasses import dataclass
 
 import fastcommand
 import requests
@@ -250,27 +254,21 @@ def command_generate_build_number(options):
     print(build_number)
 
 
-@fastcommand.command("latest-github-release", help="get the URL for an asset from the latest GitHub release matching a pattern (respects `GITHUB_TOKEN` environment variable)", arguments=[
-    fastcommand.Argument("owner"),
-    fastcommand.Argument("repository"),
-    fastcommand.Argument("pattern"),
-])
-def command_latest_github_release(options):
-
-    # Default API headers.
+def github_headers():
     headers = {
         "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
     }
-
-    # Use a GitHub token if it's present in the environment as this is likely to have fewer rate limits.
     if "GITHUB_TOKEN" in os.environ:
         headers["Authorization"] = f"Bearer {os.environ["GITHUB_TOKEN"]}"
+    return headers
 
-    # Fetch the required data with an exponential backoff (max 5m) if we hit a 403 rate limit.
+
+def github_get(url):
+    headers = github_headers()
     attempt = 1
     while True:
-        response = requests.get(f"https://api.github.com/repos/{options.owner}/{options.repository}/releases/latest", headers=headers)
+        response = requests.get(url, headers=headers)
         if response.status_code == 200:
             break
         elif response.status_code == 403:
@@ -281,16 +279,123 @@ def command_latest_github_release(options):
             continue
         else:
             response.raise_for_status()
+    return response.json()
 
-    # Check the assets for the requested pattern.
-    regex = re.compile(fnmatch.translate(options.pattern))
-    for asset in response.json()["assets"]:
-        if not regex.match(asset["name"]):
-            continue
-        print(asset["browser_download_url"])
-        return
 
-    exit(f"Failed to find asset with pattern '{options.pattern}'.")
+def filter_github_assets(assets, pattern):
+    regex = re.compile(fnmatch.translate(pattern))
+    return [asset for asset in assets if regex.match(asset["name"])]
+
+
+@fastcommand.command("latest-github-release",
+                     help="get the URL for an asset from the latest GitHub release matching a pattern (respects `GITHUB_TOKEN` environment variable)",
+                     arguments=[
+                         fastcommand.Argument("owner"),
+                         fastcommand.Argument("repository"),
+                         fastcommand.Argument("pattern"),
+                    ])
+def command_latest_github_release(options):
+    release = github_get(f"https://api.github.com/repos/{options.owner}/{options.repository}/releases/latest")
+    releases = filter_github_assets(release["assets"], options.pattern)
+    if not releases:
+        exit(f"Failed to find asset with pattern '{options.pattern}'.")
+    print(releases[0]["browser_download_url"])
+
+
+@fastcommand.command("github-releases",
+                     help="download the releases from GitHub (respects `GITHUB_TOKEN` environment variable",
+                     arguments=[
+                         fastcommand.Argument("owner"),
+                         fastcommand.Argument("repository"),
+                         fastcommand.Argument("--pattern", default=".*"),
+                         fastcommand.Argument("--output"),
+                     ])
+def command_github_releases(options):
+
+    section_re = re.compile(r"^\*\*(.+)\*\*$")
+    change_re = re.compile(r"^-\s+(.+?)(\s\(#(\d+)\))?$")
+    asset_name_re = re.compile(r"(\d+\.\d+\.\d+)-(\d+)")
+
+    def extract_artifact(asset):
+
+        artifact = {
+            "name": asset["name"],
+            "url": asset["browser_download_url"],
+        }
+
+        # Extract the version if we can.
+        asset_name_match = asset_name_re.search(asset["name"])
+        if asset_name_match:
+            build = parse_build_number(asset_name_match.group(2))
+            artifact["version"] = asset_name_match.group(1)
+            artifact["build_number"] = build.number
+            artifact["sha_short"] = build.sha_short
+            artifact["commit_url"] = f"https://github.com/{options.owner}/{options.repository}/commit/{build.sha_short}"
+            artifact["date"] = build.date.replace(tzinfo=datetime.timezone.utc).isoformat()
+            artifact["time_zone"] = "UTC"
+
+        return artifact
+
+    results = []
+    for release in github_get(f"https://api.github.com/repos/{options.owner}/{options.repository}/releases"):
+
+        artifacts = [extract_artifact(asset) for asset in filter_github_assets(release["assets"], options.pattern)]
+        changes = collections.defaultdict(list)
+        section = "default"
+        for line in [line for line in release["body"].split("\n") if line]:
+            title_match = section_re.match(line)
+            change_match = change_re.match(line)
+            if title_match:
+                section = title_match.group(1).lower()
+            elif change_match:
+                change = {
+                    "description": change_match.group(1),
+                }
+                if change_match.group(3):
+                    pr_id = change_match.group(3)
+                    change["pr"] = {
+                        "id": pr_id,
+                        "url": f"https://github.com/{options.owner}/{options.repository}/pull/{pr_id}",
+                    }
+                changes["all"].append(change)
+                changes[section].append(change)
+
+        release_dict = {
+            "name": release["name"],
+            "version": release["name"],
+            "is_released": not (release["prerelease"] or release["draft"]),
+            "url": release["html_url"],
+            "changes": dict(changes),
+            "artifacts": artifacts
+        }
+
+        # Promote the version number, build number, sha, and date if all artifacts agree.
+        if len(artifacts) > 0:
+            for key in ["version", "build_number", "sha_short", "date", "time_zone", "commit_url"]:
+                values = {artifact.get(key, None) for artifact in artifacts}
+                value = values.pop() if len(values) == 1 else None
+                if value is None:
+                    continue
+                release_dict[key] = value
+
+        results.append(release_dict)
+
+    print(json.dumps(results, indent=4, ensure_ascii=False))
+
+
+@dataclass
+class Build:
+    number: int
+    sha_short: str
+    date: datetime
+
+
+def parse_build_number(build_number):
+    date_string, sha_string = build_number[:10], build_number[10:]
+    date = datetime.datetime.strptime(date_string, "%y%m%d%H%M")
+    sha_short = "%06x" % int(sha_string)
+
+    return Build(number=build_number, sha_short=sha_short, date=date)
 
 
 @fastcommand.command("parse-build-number", help="parse a build nunmber to retrieve the date and Git SHA", arguments=[
