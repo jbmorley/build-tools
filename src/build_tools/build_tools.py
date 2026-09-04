@@ -493,7 +493,8 @@ def command_init_manifest(options):
         "metadata": {
             "version": options.version,
             "build_number": options.build_number,
-        }
+        },
+        "artifacts": [],
     }
     if options.git_sha is not None:
         manifest["metadata"]["git_sha"] = options.git_sha
