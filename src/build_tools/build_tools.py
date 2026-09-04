@@ -482,9 +482,12 @@ def command_install_provisioning_profile(options):
 
     fastcommand.Argument("--version", required=True, help="version of the project"),
     fastcommand.Argument("--build-number", required=True, help="build number of the project"),
+
+    fastcommand.Argument("--git-sha", help="git sha of the project"),
 ])
 def command_init_manifest(options):
     manifest_path = os.path.abspath(options.manifest)
+
     manifest = {
         "version": 1,
         "metadata": {
@@ -492,6 +495,9 @@ def command_init_manifest(options):
             "build_number": options.build_number,
         }
     }
+    if options.git_sha is not None:
+        manifest["metadata"]["git_sha"] = options.git_sha
+
     with open(manifest_path, "w") as fh:
         json.dump(manifest, fh, indent=4)
         fh.write("\n")
@@ -507,7 +513,7 @@ def command_init_manifest(options):
 
     fastcommand.Argument("--name", help="filename of the asset; inferred from the path if not provided"),
     fastcommand.Argument("--path", required=True, help="path to the artifact (relative or absolute); in the case of GitHub releases this should be the assset filename"),
-    fastcommand.Argument("--format", required=True, choices=["deb", "pkg", "zip"], help="artifact format"),
+    fastcommand.Argument("--format", required=True, choices=["deb", "pkg", "uf2", "zip"], help="artifact format"),
     fastcommand.Argument("--git-sha", required=True, help="git sha associated with the artifact"),
 
     fastcommand.Argument("--supports-os", required=True, choices=["macos", "debian", "ubuntu"], help="supported os"),
