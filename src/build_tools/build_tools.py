@@ -476,6 +476,27 @@ def command_install_provisioning_profile(options):
         shutil.copy(path, destination_path)
 
 
+@fastcommand.command("init-manifest", help="create a new artifact manifest", arguments=[
+
+    fastcommand.Argument("manifest", help="manifest to create or update"),
+
+    fastcommand.Argument("--version", required=True, help="version of the project"),
+    fastcommand.Argument("--build-number", required=True, help="build number of the project"),
+])
+def command_init_manifest(options):
+    manifest_path = os.path.abspath(options.manifest)
+    manifest = {
+        "version": 1,
+        "metadata": {
+            "version": options.version,
+            "build_number": options.build_number,
+        }
+    }
+    with open(manifest_path, "w") as fh:
+        json.dump(manifest, fh, indent=4)
+        fh.write("\n")
+
+
 @fastcommand.command("add-artifact", help="add an artifact to the artifact manifest", arguments=[
 
     fastcommand.Argument("manifest", help="manifest to create or update"),
