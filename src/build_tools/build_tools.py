@@ -345,10 +345,11 @@ def command_github_releases(options):
             return None
 
         # Add the digest.
-        digest_type, digest = asset["digest"].split(":")
-        if digest_type != "sha256":
-            raise AssertionError(f"Unsupported digest type '{digest_type}'")
-        artifact["sha256"] = digest
+        if "digest" in asset and asset["digest"] is not None:
+            digest_type, digest = asset["digest"].split(":")
+            if digest_type != "sha256":
+                raise AssertionError(f"Unsupported digest type '{digest_type}'")
+            artifact["sha256"] = digest
 
         # Extract the version and associated metadata if we can.
         asset_name_match = re.search(r"(\d+\.\d+\.\d+)-(\d+)", asset["name"])
@@ -392,16 +393,28 @@ def command_github_releases(options):
         base_url = f"https://github.com/{options.owner}/{options.repository}/releases/download/{release["name"]}"
         manifest["artifacts"] = [expand_build_number_metadata(artifact, base_url) for artifact in manifest["artifacts"]]
 
+        # Check we've managed to find a build number in at least one of assets.
+        asset_metadata = extract_keys(manifest["artifacts"], ["version", "build_number", "git_sha"])
+        if manifest["artifacts"] and "build_number" not in asset_metadata:
+            exit(f"Failed to find build number in assets ({[asset["name"] for asset in manifest["artifacts"]]}) for release '{release["name"]}' ({release["html_url"]}).")
+
         # Support version 1 manifests.
+        # N.B. If we don't have any artifacts, then we have to use the release to get the version number.
         if manifest["version"] == 1:
-            manifest["metadata"] = extract_keys(manifest["artifacts"], ["version", "build_number", "git_sha"])
+            if manifest["artifacts"]:
+                manifest["metadata"] = extract_keys(manifest["artifacts"], ["version", "build_number", "git_sha"])
+            else:
+                manifest["metadata"] = {
+                    "version": release["name"]
+                }
 
         # Add GitHub metadata.
         manifest["is_released"] = not (release["prerelease"] or release["draft"])
         manifest["url"] = release["html_url"]
         manifest["changes"] = dict(changes)
 
-        if "metadata" in manifest:
+        # Expand the build number metadata if we have one.
+        if "build_number" in manifest["metadata"]:
             build = parse_build_number(manifest["metadata"]["build_number"])
             manifest["commit_url"] = f"https://github.com/{options.owner}/{options.repository}/commit/{manifest["metadata"]["git_sha"]}"
             manifest["date"] = build.date.replace(tzinfo=datetime.timezone.utc).isoformat()
@@ -436,7 +449,9 @@ def command_github_releases(options):
                 changes[section].append(change)
         return changes
 
-    tags = github_get_paginated(f"https://api.github.com/repos/{options.owner}/{options.repository}/tags")
+    tags = list(github_get_paginated(f"https://api.github.com/repos/{options.owner}/{options.repository}/tags", params={
+        "per_page": 100,
+    }))
 
     def get_tag_sha(name):
         for tag in tags:
@@ -445,7 +460,10 @@ def command_github_releases(options):
         raise KeyError(name)
 
     results = []
-    for release in github_get_paginated(f"https://api.github.com/repos/{options.owner}/{options.repository}/releases"):
+    releases = github_get_paginated(f"https://api.github.com/repos/{options.owner}/{options.repository}/releases", params={
+        "per_page": 100,
+    })
+    for release in releases:
         changes = parse_changes(release)
 
         manifest_assets = [asset for asset in [asset for asset in release["assets"] if asset["name"] == "manifest.json"] if asset is not None]
