@@ -264,11 +264,11 @@ def github_headers():
     return headers
 
 
-def github_get(url):
-    headers = github_headers()
+def github_get(url, *args, **kwargs):
+    kwargs["headers"] = github_headers()
     attempt = 1
     while True:
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, *args, **kwargs)
         if response.status_code == 200:
             break
         elif response.status_code == 403:
@@ -279,7 +279,17 @@ def github_get(url):
             continue
         else:
             response.raise_for_status()
-    return response.json()
+    return response
+
+
+def github_get_paginated(url, *args, **kwargs):
+    response = github_get(url, *args, **kwargs)
+    while True:
+        for item in response.json():
+            yield item
+        if not "next" in response.links:
+            return
+        response = github_get(response.links["next"]["url"], *args, **kwargs)
 
 
 def filter_github_assets(assets, pattern):
@@ -295,7 +305,7 @@ def filter_github_assets(assets, pattern):
                          fastcommand.Argument("pattern"),
                     ])
 def command_latest_github_release(options):
-    release = github_get(f"https://api.github.com/repos/{options.owner}/{options.repository}/releases/latest")
+    release = github_get(f"https://api.github.com/repos/{options.owner}/{options.repository}/releases/latest").json()
     releases = filter_github_assets(release["assets"], options.pattern)
     if not releases:
         exit(f"Failed to find asset with pattern '{options.pattern}'.")
@@ -307,39 +317,104 @@ def command_latest_github_release(options):
                      arguments=[
                          fastcommand.Argument("owner"),
                          fastcommand.Argument("repository"),
-                         fastcommand.Argument("--pattern", default=".*"),
+                         fastcommand.Argument("--synthesize-manifests", help="add additional data to releases without manifests using pattern matching"),
                          fastcommand.Argument("--output"),
                      ])
 def command_github_releases(options):
+    manifest_definition = {}
+    if options.synthesize_manifests:
+        with open(os.path.abspath(options.synthesize_manifests)) as fh:
+            manifest_definition = json.load(fh)
 
-    section_re = re.compile(r"^\*\*(.+)\*\*$")
-    change_re = re.compile(r"^-\s+(.+?)(\s\(#(\d+)\))?$")
-    asset_name_re = re.compile(r"(\d+\.\d+\.\d+)-(\d+)")
-
-    def extract_artifact(asset):
-
+    def extract_artifact(asset, git_sha):
         artifact = {
             "name": asset["name"],
-            "url": asset["browser_download_url"],
+            "path": asset["name"],
+            "supports": [],
         }
 
-        # Extract the version if we can.
-        asset_name_match = asset_name_re.search(asset["name"])
-        if asset_name_match:
-            build = parse_build_number(asset_name_match.group(2))
-            artifact["version"] = asset_name_match.group(1)
-            artifact["build_number"] = build.number
-            artifact["sha_short"] = build.sha_short
-            artifact["commit_url"] = f"https://github.com/{options.owner}/{options.repository}/commit/{build.sha_short}"
-            artifact["date"] = build.date.replace(tzinfo=datetime.timezone.utc).isoformat()
-            artifact["time_zone"] = "UTC"
+        # Augment the artifact using the manifest definition; otherwise exclude it.
+        matches_definition = False
+        for pattern, metadata in manifest_definition.items():
+            pattern_re = re.compile(fnmatch.translate(pattern))
+            if pattern_re.match(artifact["name"]):
+                artifact = {**artifact, **metadata}
+                matches_definition = True
+                break
+        if not matches_definition:
+            return None
+
+        # Add the digest.
+        digest_type, digest = asset["digest"].split(":")
+        if digest_type != "sha256":
+            raise AssertionError(f"Unsupported digest type '{digest_type}'")
+        artifact["sha256"] = digest
+
+        # Extract the version and associated metadata if we can.
+        asset_name_match = re.search(r"(\d+\.\d+\.\d+)-(\d+)", asset["name"])
+        if not asset_name_match:
+            return artifact
+        build = parse_build_number(asset_name_match.group(2))
+        artifact["version"] = asset_name_match.group(1)
+        artifact["build_number"] = build.number
+        artifact["git_sha"] = git_sha
 
         return artifact
 
-    results = []
-    for release in github_get(f"https://api.github.com/repos/{options.owner}/{options.repository}/releases"):
+    def extract_keys(dictionaries, keys):
+        """Extract keys from a list of dictionaries iff the values are identical or absent across all dictionaries."""
+        result = {}
+        if len(dictionaries) > 0:
+            for key in keys:
+                values = {dictionary[key] for dictionary in dictionaries if key in dictionary}
+                value = values.pop() if len(values) == 1 else None
+                if value is None:
+                    continue
+                result[key] = value
+        return result
 
-        artifacts = [extract_artifact(asset) for asset in filter_github_assets(release["assets"], options.pattern)]
+    def expand_build_number_metadata(artifact, base_url):
+        """Parse the build number and add any additional metadata to the dictionary."""
+        if "build_number" not in artifact:
+            return artifact
+        build = parse_build_number(artifact["build_number"])
+        artifact["date"] = build.date.replace(tzinfo=datetime.timezone.utc).isoformat()
+        artifact["time_zone"] = "UTC"
+        artifact["url"] = f"{base_url}/{artifact["name"]}"
+        return artifact
+
+    def augment_manifest(manifest, release):
+        """Augment release metadata with the release data from GitHub."""
+
+        manifest = dict(manifest)
+
+        # Expand implicit artifact metadata.
+        base_url = f"https://github.com/{options.owner}/{options.repository}/releases/download/{release["name"]}"
+        manifest["artifacts"] = [expand_build_number_metadata(artifact, base_url) for artifact in manifest["artifacts"]]
+
+        # Support version 1 manifests.
+        if manifest["version"] == 1:
+            manifest["metadata"] = extract_keys(manifest["artifacts"], ["version", "build_number", "git_sha"])
+
+        # Add GitHub metadata.
+        manifest["is_released"] = not (release["prerelease"] or release["draft"])
+        manifest["url"] = release["html_url"]
+        manifest["changes"] = dict(changes)
+
+        if "metadata" in manifest:
+            build = parse_build_number(manifest["metadata"]["build_number"])
+            manifest["commit_url"] = f"https://github.com/{options.owner}/{options.repository}/commit/{manifest["metadata"]["git_sha"]}"
+            manifest["date"] = build.date.replace(tzinfo=datetime.timezone.utc).isoformat()
+            manifest["time_zone"] = "UTC"
+
+        return manifest
+
+    def parse_changes(release):
+        """Generate a list of changes from the release description."""
+
+        section_re = re.compile(r"^\*\*(.+)\*\*$")
+        change_re = re.compile(r"^-\s+(.+?)(\s\(#(\d+)\))?$")
+
         changes = collections.defaultdict(list)
         section = "default"
         for line in [line for line in release["body"].split("\n") if line]:
@@ -359,28 +434,74 @@ def command_github_releases(options):
                     }
                 changes["all"].append(change)
                 changes[section].append(change)
+        return changes
 
-        release_dict = {
-            "name": release["name"],
-            "version": release["name"],
-            "is_released": not (release["prerelease"] or release["draft"]),
-            "url": release["html_url"],
-            "changes": dict(changes),
-            "artifacts": artifacts
+    tags = github_get_paginated(f"https://api.github.com/repos/{options.owner}/{options.repository}/tags")
+
+    def get_tag_sha(name):
+        for tag in tags:
+            if tag["name"] == name:
+                return tag["commit"]["sha"]
+        raise KeyError(name)
+
+    results = []
+    for release in github_get_paginated(f"https://api.github.com/repos/{options.owner}/{options.repository}/releases"):
+        changes = parse_changes(release)
+
+        manifest_assets = [asset for asset in [asset for asset in release["assets"] if asset["name"] == "manifest.json"] if asset is not None]
+        if manifest_assets:
+            # Use the manifest if it exists.
+            manifest = github_get(manifest_assets[0]["browser_download_url"]).json()
+        else:
+            # Synthesizing a manifest from the listed releases.
+
+            # Look up the git sha of the release tag.
+            git_sha = get_tag_sha(release["tag_name"])
+
+            # Parse the artifacts augmenting them were possible.
+            artifacts = [extract_artifact(asset, git_sha) for asset in release["assets"]]
+            artifacts = list(filter(lambda x: x is not None, artifacts))
+
+            # Get the version and build number if they're consistent (or absent) across all detected assets.
+            extracted_metadata = extract_keys(artifacts, ["version", "build_number"])
+
+            # Synthesize a version and build number from the release if we weren't able to detect one.
+            if not extracted_metadata:
+                extracted_metadata = {
+                    "version": release["name"],
+                    "build_number": 0,
+                }
+
+            # Synthesize the manifest.
+            manifest = {
+                "version": 1,
+                "metadata": {
+                    "version": extracted_metadata["version"],
+                    "build_number": extracted_metadata["build_number"],
+                    "git_sha": git_sha,
+                },
+                "artifacts": artifacts,
+            }
+
+        # Bind the release information into the manifest.
+        manifest = augment_manifest(manifest, release)
+
+        results.append(manifest)
+
+    # Flatten the artifacts' supports lists.
+    flat_releases = [
+        {
+            **release,
+            "artifacts": [
+                {**{k: v for k, v in artifact.items() if k != "supports"}, "support": support}
+                for artifact in release["artifacts"]
+                for support in artifact["supports"]
+            ],
         }
+        for release in results
+    ]
 
-        # Promote the version number, build number, sha, and date if all artifacts agree.
-        if len(artifacts) > 0:
-            for key in ["version", "build_number", "sha_short", "date", "time_zone", "commit_url"]:
-                values = {artifact[key] for artifact in artifacts if key in artifact}
-                value = values.pop() if len(values) == 1 else None
-                if value is None:
-                    continue
-                release_dict[key] = value
-
-        results.append(release_dict)
-
-    print(json.dumps(results, indent=4, ensure_ascii=False))
+    print(json.dumps(flat_releases, indent=4, ensure_ascii=False))
 
 
 @dataclass
@@ -489,7 +610,7 @@ def command_init_manifest(options):
     manifest_path = os.path.abspath(options.manifest)
 
     manifest = {
-        "version": 1,
+        "version": 2,
         "metadata": {
             "version": options.version,
             "build_number": options.build_number,
@@ -535,7 +656,7 @@ def command_add_artifact(options):
         with open(manifest_path, "r") as fh:
             manifest = json.load(fh)
 
-    if "version" not in manifest or manifest["version"] != 1:
+    if "version" not in manifest or manifest["version"] not in set([1, 2]):
         exit("Unsupported manifest version.")
 
     name = options.name if options.name else os.path.basename(options.path)
