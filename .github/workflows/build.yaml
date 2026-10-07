@@ -30,7 +30,7 @@ on:
 
 jobs:
   smoke-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
 
     steps:
 
@@ -68,7 +68,7 @@ jobs:
       run: scripts/test-keychain.sh
 
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: write
     outputs:
@@ -117,7 +117,7 @@ jobs:
     if: ${{ (github.ref == 'refs/heads/main') && (needs.build.outputs.needs_release == 'true') }}
     needs:
     - build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     environment:
       name: pypi
       url: https://pypi.org/p/inseven-build-tools
