@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) 2018-2026 Jason Morley
+# Copyright (c) 2026 Jason Morley
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -25,36 +25,10 @@ set -o pipefail
 set -x
 set -u
 
-ROOT_DIRECTORY="$( cd "$( dirname "$( dirname "${BASH_SOURCE[0]}" )" )" &> /dev/null && pwd )"
-SCRIPTS_DIRECTORY="$ROOT_DIRECTORY/scripts"
-BUILD_DIRECTORY="$ROOT_DIRECTORY/dist"
-SOURCE_DIRECTORY="$ROOT_DIRECTORY/src"
+ROOT_DIRECTORY="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." &> /dev/null && pwd )"
 
-# Configure the path.
-PATH=$PATH:"$ROOT_DIRECTORY"
+PYTHON_VERSION="3.14"
 
-# Write outputs to /dev/null if we're not running under GitHub Actions.
-GITHUB_OUTPUT="${GITHUB_OUTPUT:-/dev/null}"
-
-"$SCRIPTS_DIRECTORY/check-python-version.sh"
-
-# Clean up and recreate the output directories.
-if [ -d "$BUILD_DIRECTORY" ] ; then
-    rm -r "$BUILD_DIRECTORY"
-fi
-mkdir -p "$BUILD_DIRECTORY"
-
-# Determine the version.
-export VERSION=$(changes version)
-export RELEASED_VERSION=$(changes version --released)
-
-# Build the package.
-cd "$SOURCE_DIRECTORY"
-pyproject-build -o "$BUILD_DIRECTORY"
-
-# Check if the package needs a release and report it to GitHub Actions.
-if [[ "$VERSION" == "$RELEASED_VERSION" ]]; then
-    echo "needs_release=false" >> "$GITHUB_OUTPUT"
-else
-    echo "needs_release=true" >> "$GITHUB_OUTPUT"
-fi
+# Ensure the all scripts share the same Python version.
+grep -q "^python = \"$PYTHON_VERSION\." "$ROOT_DIRECTORY/mise.toml"
+grep -q "^python_version = \"$PYTHON_VERSION\"$" "$ROOT_DIRECTORY/Pipfile"
