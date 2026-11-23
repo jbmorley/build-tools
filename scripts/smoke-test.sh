@@ -28,29 +28,6 @@ set -u
 ROOT_DIRECTORY="$( cd "$( dirname "$( dirname "${BASH_SOURCE[0]}" )" )" &> /dev/null && pwd )"
 BUILD_TOOLS="$ROOT_DIRECTORY/build-tools"
 
-export LOCAL_TOOLS_PATH="$ROOT_DIRECTORY/.local-smoke-test"
-export PYTHONUSERBASE="$LOCAL_TOOLS_PATH/python"
-export PATH="$PYTHONUSERBASE/bin:$PATH"
-export PYTHONPATH="$PYTHONUSERBASE"
-export WORKON_HOME="$LOCAL_TOOLS_PATH"
-export PIPENV_CUSTOM_VENV_NAME="venv"
-export PIPENV_IGNORE_VIRTUALENVS=1
-export PIPENV_PIPFILE="$ROOT_DIRECTORY/Pipfile"
-
-# Explicitly disable in-project virtualenvs; without this Pipenv uses an
-# existing ./.venv in the project root (if present) in preference to WORKON_HOME.
-export PIPENV_VENV_IN_PROJECT=0
-
-# Recreate the namespaced tools directory so the install starts clean.
-if [ -d "$LOCAL_TOOLS_PATH" ] ; then
-    rm -r "$LOCAL_TOOLS_PATH"
-fi
-mkdir -p "$PYTHONUSERBASE"
-
-# Install Pipenv (locally) and the project dependencies.
-pip install --user --upgrade pip pipenv wheel
-pipenv install
-
 # The CLI loads and reports its top-level usage.
 "$BUILD_TOOLS" --help
 

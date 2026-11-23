@@ -36,8 +36,6 @@ PATH=$PATH:"$ROOT_DIRECTORY"
 # Write outputs to /dev/null if we're not running under GitHub Actions.
 GITHUB_OUTPUT="${GITHUB_OUTPUT:-/dev/null}"
 
-"$SCRIPTS_DIRECTORY/check-python-version.sh"
-
 # Clean up and recreate the output directories.
 if [ -d "$BUILD_DIRECTORY" ] ; then
     rm -r "$BUILD_DIRECTORY"
