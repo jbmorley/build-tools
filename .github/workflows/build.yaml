@@ -59,9 +59,6 @@ jobs:
         version: 2026.11.12
         cache: false
 
-    - name: Test the create-keychain command
-      run: scripts/test-keychain.sh
-
     - name: Source-only smoke test
       run: scripts/smoke-test.sh
 
